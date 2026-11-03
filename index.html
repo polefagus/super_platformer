@@ -1,0 +1,517 @@
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Супер платформер</title>
+<style>
+* { box-sizing:border-box; }
+body {
+  margin:0;
+  background:#17233b;
+  color:white;
+  font-family:Arial,sans-serif;
+  text-align:center;
+}
+h1 { color:#ffd84d; }
+#info {
+  display:flex;
+  justify-content:center;
+  gap:25px;
+  flex-wrap:wrap;
+  font-size:18px;
+  margin:12px;
+}
+canvas {
+  display:block;
+  width:min(96vw,900px);
+  height:auto;
+  margin:auto;
+  border:4px solid white;
+  border-radius:10px;
+  background:#76c9f5;
+}
+button {
+  background:#ffca38;
+  color:#17233b;
+  border:0;
+  border-radius:10px;
+  padding:12px 18px;
+  margin:5px;
+  font-size:17px;
+  font-weight:bold;
+  cursor:pointer;
+}
+.controls {
+  margin:12px;
+}
+.controls button {
+  min-width:65px;
+  min-height:55px;
+  font-size:23px;
+  touch-action:none;
+}
+#message {
+  font-size:22px;
+  color:#ffe36e;
+  min-height:30px;
+  margin:10px;
+}
+</style>
+</head>
+<body>
+
+<h1>⭐ СУПЕР ПЛАТФОРМЕР ⭐</h1>
+
+<div id="info">
+  <span>🪙 Монеты: <b id="coins">0</b></span>
+  <span>❤️ Жизни: <b id="lives">3</b></span>
+  <span>🏆 Уровень: <b id="level">1</b></span>
+</div>
+
+<canvas id="game" width="900" height="500"></canvas>
+
+<div id="message">Собирай монеты и доберись до финиша!</div>
+
+<div class="controls">
+  <button id="left">⬅️</button>
+  <button id="jump">⬆️</button>
+  <button id="right">➡️</button>
+</div>
+
+<button onclick="restart()">🔄 Начать заново</button>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+const W = canvas.width;
+const H = canvas.height;
+
+let player, platforms, coins, enemies, goal;
+let camera = 0;
+let score = 0;
+let lives = 3;
+let level = 1;
+let won = false;
+let gameOver = false;
+let keys = {};
+let jumpPressed = false;
+let lastTime = 0;
+
+const gravity = 0.65;
+const speed = 4.5;
+const jumpPower = -13;
+
+function createLevel() {
+  player = {
+    x:50, y:350,
+    w:30, h:42,
+    vx:0, vy:0,
+    onGround:false
+  };
+
+  platforms = [
+    {x:0,y:450,w:450,h:50},
+    {x:500,y:450,w:350,h:50},
+    {x:900,y:450,w:400,h:50},
+    {x:1350,y:450,w:350,h:50},
+    {x:1750,y:450,w:450,h:50},
+    {x:2300,y:450,w:400,h:50},
+
+    {x:220,y:360,w:130,h:20},
+    {x:440,y:300,w:130,h:20},
+    {x:650,y:360,w:130,h:20},
+    {x:930,y:340,w:150,h:20},
+    {x:1150,y:270,w:130,h:20},
+    {x:1400,y:350,w:150,h:20},
+    {x:1650,y:290,w:130,h:20},
+    {x:1900,y:350,w:150,h:20},
+    {x:2150,y:280,w:130,h:20},
+    {x:2450,y:350,w:130,h:20}
+  ];
+
+  coins = [
+    {x:270,y:325,taken:false},
+    {x:490,y:265,taken:false},
+    {x:700,y:325,taken:false},
+    {x:980,y:305,taken:false},
+    {x:1200,y:235,taken:false},
+    {x:1460,y:315,taken:false},
+    {x:1700,y:255,taken:false},
+    {x:1950,y:315,taken:false},
+    {x:2200,y:245,taken:false},
+    {x:2500,y:315,taken:false}
+  ];
+
+  enemies = [
+    {x:600,y:418,w:30,h:32,vx:1.5,min:550,max:800},
+    {x:1450,y:418,w:30,h:32,vx:1.8,min:1370,max:1650},
+    {x:1850,y:418,w:30,h:32,vx:1.5,min:1780,max:2150}
+  ];
+
+  goal = {x:2630,y:360,w:45,h:90};
+
+  camera = 0;
+  won = false;
+  gameOver = false;
+  updateInfo();
+  showMessage("Собирай монеты и доберись до финиша!");
+}
+
+function updateInfo() {
+  document.getElementById("coins").textContent = score;
+  document.getElementById("lives").textContent = lives;
+  document.getElementById("level").textContent = level;
+}
+
+function showMessage(text) {
+  document.getElementById("message").textContent = text;
+}
+
+function restart() {
+  score = 0;
+  lives = 3;
+  level = 1;
+  createLevel();
+}
+
+function nextLevel() {
+  level++;
+  createLevel();
+  showMessage("Отлично! Уровень " + level + "!");
+}
+
+function loseLife() {
+  lives--;
+  updateInfo();
+
+  if (lives <= 0) {
+    gameOver = true;
+    showMessage("Игра окончена! Нажми «Начать заново».");
+  } else {
+    player.x = 50;
+    player.y = 350;
+    player.vx = 0;
+    player.vy = 0;
+    camera = 0;
+    showMessage("Осторожно! Осталось жизней: " + lives);
+  }
+}
+
+function collide(a,b) {
+  return a.x < b.x+b.w &&
+         a.x+a.w > b.x &&
+         a.y < b.y+b.h &&
+         a.y+a.h > b.y;
+}
+
+function update() {
+  if (won || gameOver) return;
+
+  // Движение
+  player.vx = 0;
+
+  if (keys.left) player.vx = -speed;
+  if (keys.right) player.vx = speed;
+
+  player.x += player.vx;
+
+  // Столкновение с платформами по горизонтали
+  for (const p of platforms) {
+    if (collide(player,p)) {
+      if (player.vx > 0) player.x = p.x-player.w;
+      if (player.vx < 0) player.x = p.x+p.w;
+    }
+  }
+
+  // Прыжок
+  if (jumpPressed && player.onGround) {
+    player.vy = jumpPower;
+    player.onGround = false;
+  }
+  jumpPressed = false;
+
+  // Гравитация
+  player.vy += gravity;
+  if (player.vy > 14) player.vy = 14;
+
+  player.y += player.vy;
+  player.onGround = false;
+
+  // Столкновение с платформами по вертикали
+  for (const p of platforms) {
+    if (collide(player,p)) {
+      if (player.vy > 0) {
+        player.y = p.y-player.h;
+        player.vy = 0;
+        player.onGround = true;
+      } else if (player.vy < 0) {
+        player.y = p.y+p.h;
+        player.vy = 0;
+      }
+    }
+  }
+
+  // Границы мира
+  if (player.x < 0) player.x = 0;
+
+  // Падение
+  if (player.y > H+100) {
+    loseLife();
+    return;
+  }
+
+  // Сбор монет
+  for (const c of coins) {
+    if (!c.taken &&
+        player.x < c.x+20 &&
+        player.x+player.w > c.x-10 &&
+        player.y < c.y+20 &&
+        player.y+player.h > c.y-10) {
+      c.taken = true;
+      score++;
+      updateInfo();
+    }
+  }
+
+  // Движение врагов
+  for (const e of enemies) {
+    e.x += e.vx;
+
+    if (e.x < e.min || e.x > e.max) {
+      e.vx *= -1;
+    }
+
+    if (collide(player,e)) {
+      if (player.vy > 2 && player.y+player.h-e.y < 20) {
+        player.vy = -9;
+        e.x = -1000;
+      } else {
+        loseLife();
+        return;
+      }
+    }
+  }
+
+  // Финиш
+  if (collide(player,goal)) {
+    if (level < 3) {
+      nextLevel();
+    } else {
+      won = true;
+      showMessage("🏆 ПОБЕДА! Ты прошёл все уровни!");
+    }
+  }
+
+  // Камера
+  camera = Math.max(0,Math.min(1800,player.x-300));
+}
+
+function drawBackground() {
+  ctx.fillStyle = "#76c9f5";
+  ctx.fillRect(0,0,W,H);
+
+  // Облака
+  ctx.fillStyle = "white";
+  for (let i=0;i<8;i++) {
+    let x = ((i*380-camera*0.3)%(W+150)+W+150)%(W+150)-70;
+    let y = 65+(i%3)*65;
+
+    ctx.beginPath();
+    ctx.arc(x,y,22,0,Math.PI*2);
+    ctx.arc(x+25,y-10,27,0,Math.PI*2);
+    ctx.arc(x+52,y,20,0,Math.PI*2);
+    ctx.fill();
+  }
+
+  // Далёкие холмы
+  ctx.fillStyle = "#6eaf7a";
+  for(let i=0;i<8;i++) {
+    let x=i*420-camera*0.5;
+    ctx.beginPath();
+    ctx.arc(x,480,180,Math.PI,0);
+    ctx.fill();
+  }
+}
+
+function drawPlatforms() {
+  for (const p of platforms) {
+    const x=p.x-camera;
+
+    if (x+p.w < 0 || x > W) continue;
+
+    ctx.fillStyle="#86512e";
+    ctx.fillRect(x,p.y,p.w,p.h);
+
+    ctx.fillStyle="#43b047";
+    ctx.fillRect(x,p.y,p.w,10);
+
+    ctx.fillStyle="#a96c3d";
+    for(let bx=x+20;bx<x+p.w-10;bx+=35) {
+      ctx.fillRect(bx,p.y+20,10,10);
+    }
+  }
+}
+
+function drawCoins() {
+  for (const c of coins) {
+    if(c.taken) continue;
+
+    const x=c.x-camera;
+    ctx.fillStyle="#ffdc32";
+    ctx.beginPath();
+    ctx.arc(x,c.y,11,0,Math.PI*2);
+    ctx.fill();
+
+    ctx.strokeStyle="#e99c16";
+    ctx.lineWidth=3;
+    ctx.stroke();
+
+    ctx.fillStyle="#fff4a1";
+    ctx.fillRect(x-2,c.y-6,4,12);
+  }
+}
+
+function drawEnemies() {
+  for(const e of enemies) {
+    if(e.x < -900) continue;
+
+    const x=e.x-camera;
+
+    ctx.fillStyle="#d84949";
+    ctx.fillRect(x,e.y,e.w,e.h);
+
+    ctx.fillStyle="white";
+    ctx.fillRect(x+5,e.y+7,7,8);
+    ctx.fillRect(x+19,e.y+7,7,8);
+
+    ctx.fillStyle="#222";
+    ctx.fillRect(x+8,e.y+10,3,4);
+    ctx.fillRect(x+22,e.y+10,3,4);
+  }
+}
+
+function drawGoal() {
+  const x=goal.x-camera;
+
+  ctx.fillStyle="#444";
+  ctx.fillRect(x+7,goal.y,7,goal.h);
+
+  ctx.fillStyle="#ffdf40";
+  ctx.beginPath();
+  ctx.moveTo(x+14,goal.y);
+  ctx.lineTo(x+60,goal.y+18);
+  ctx.lineTo(x+14,goal.y+36);
+  ctx.fill();
+}
+
+function drawPlayer() {
+  const x=player.x-camera;
+  const y=player.y;
+
+  // Ноги
+  ctx.fillStyle="#263d87";
+  ctx.fillRect(x+4,y+27,9,15);
+  ctx.fillRect(x+18,y+27,9,15);
+
+  // Тело
+  ctx.fillStyle="#e94d42";
+  ctx.fillRect(x+2,y+14,26,18);
+
+  // Голова
+  ctx.fillStyle="#ffd0a0";
+  ctx.fillRect(x+5,y,21,19);
+
+  // Глаза
+  ctx.fillStyle="#222";
+  ctx.fillRect(x+18,y+6,3,4);
+}
+
+function draw() {
+  drawBackground();
+  drawPlatforms();
+  drawCoins();
+  drawEnemies();
+  drawGoal();
+  drawPlayer();
+
+  if(won || gameOver) {
+    ctx.fillStyle="rgba(0,0,0,.65)";
+    ctx.fillRect(0,0,W,H);
+
+    ctx.fillStyle="#ffdf40";
+    ctx.font="bold 38px Arial";
+    ctx.textAlign="center";
+    ctx.fillText(won ? "ТЫ ПОБЕДИЛ!" : "ИГРА ОКОНЧЕНА",W/2,220);
+
+    ctx.font="22px Arial";
+    ctx.fillStyle="white";
+    ctx.fillText("Нажми «Начать заново»",W/2,270);
+  }
+}
+
+function loop(time) {
+  if(time-lastTime > 16) {
+    update();
+    draw();
+    lastTime=time;
+  }
+  requestAnimationFrame(loop);
+}
+
+// Клавиатура
+document.addEventListener("keydown",e=>{
+  const k=e.key.toLowerCase();
+
+  if(["arrowleft","arrowright","arrowup"," "].includes(k)) {
+    e.preventDefault();
+  }
+
+  if(k==="a" || k==="arrowleft") keys.left=true;
+  if(k==="d" || k==="arrowright") keys.right=true;
+
+  if((k==="w" || k==="arrowup" || k===" ") && !e.repeat) {
+    jumpPressed=true;
+  }
+});
+
+document.addEventListener("keyup",e=>{
+  const k=e.key.toLowerCase();
+
+  if(k==="a" || k==="arrowleft") keys.left=false;
+  if(k==="d" || k==="arrowright") keys.right=false;
+});
+
+// Кнопки для телефона
+function holdButton(id,key) {
+  const btn=document.getElementById(id);
+
+  btn.addEventListener("pointerdown",e=>{
+    e.preventDefault();
+    keys[key]=true;
+    btn.setPointerCapture(e.pointerId);
+    if(key==="jump") jumpPressed=true;
+  });
+
+  function release(e) {
+    e.preventDefault();
+    keys[key]=false;
+  }
+
+  btn.addEventListener("pointerup",release);
+  btn.addEventListener("pointercancel",release);
+  btn.addEventListener("lostpointercapture",()=>keys[key]=false);
+}
+
+holdButton("left","left");
+holdButton("right","right");
+holdButton("jump","jump");
+
+createLevel();
+requestAnimationFrame(loop);
+</script>
+
+</body>
+</html>
